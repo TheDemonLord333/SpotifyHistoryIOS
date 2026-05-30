@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct SpotifyHistoryIOSApp: App {
+    @State private var auth = SpotifyAuthManager.shared
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(auth)
         }
     }
 }
