@@ -10,9 +10,22 @@
 		5D27F4E82FCB4E9B00BF3324 /* SpotifyHistoryIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SpotifyHistoryIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5D27F4EC2FCB4E9B00BF3324 = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 5D27F4E72FCB4E9B00BF3324 /* SpotifyHistoryIOS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		5D27F4EA2FCB4E9B00BF3324 /* SpotifyHistoryIOS */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5D27F4EC2FCB4E9B00BF3324 /* PBXFileSystemSynchronizedBuildFileExceptionSet */,
+			);
 			path = SpotifyHistoryIOS;
 			sourceTree = "<group>";
 		};
