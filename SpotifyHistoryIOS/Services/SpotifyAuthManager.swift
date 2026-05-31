@@ -219,21 +219,19 @@ final class SpotifyAuthManager {
 // MARK: - Presentation Context
 
 private final class AuthPresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding, Sendable {
+    // ASWebAuthenticationSession always calls presentationAnchor on the main thread,
+    // so MainActor.assumeIsolated is safe here (avoids deadlock from DispatchQueue.main.sync).
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        DispatchQueue.main.sync {
+        MainActor.assumeIsolated {
             let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            // Prefer the active foreground scene's key window
             if let window = scenes
                 .first(where: { $0.activationState == .foregroundActive })?
                 .windows.first(where: \.isKeyWindow) {
                 return window
             }
-            // Fall back to any window
             if let window = scenes.flatMap(\.windows).first { return window }
-            // Last resort: create a window attached to the first available scene
-            // (on iOS 26 there is always at least one UIWindowScene when the app is running)
             if let scene = scenes.first { return UIWindow(windowScene: scene) }
-            return UIWindow() // unreachable on iOS 26
+            return UIWindow()
         }
     }
 }
