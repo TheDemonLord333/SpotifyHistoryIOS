@@ -173,8 +173,12 @@ final class SpotifyAuthManager {
         var request = URLRequest(url: URL(string: "https://accounts.spotify.com/api/token")!)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+        // application/x-www-form-urlencoded: percent-encode everything except unreserved chars.
+        // Using urlQueryAllowed would leave '+' unencoded, but '+' means space in form bodies.
+        let formChars = CharacterSet.alphanumerics.union(.init(charactersIn: "-._~"))
         request.httpBody = body
-            .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }
+            .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: formChars) ?? $0.value)" }
             .joined(separator: "&")
             .data(using: .utf8)
 
@@ -183,17 +187,36 @@ final class SpotifyAuthManager {
         guard let http = response as? HTTPURLResponse else {
             throw SpotifyError.networkError("Invalid response")
         }
+
         guard http.statusCode == 200 else {
-            throw SpotifyError.authFailed("HTTP \(http.statusCode)")
+            // Decode Spotify's error JSON  {"error":"...", "error_description":"..."}
+            struct SpotifyAPIError: Decodable {
+                let error: String
+                let errorDescription: String?
+                enum CodingKeys: String, CodingKey {
+                    case error
+                    case errorDescription = "error_description"
+                }
+            }
+            if let apiError = try? JSONDecoder().decode(SpotifyAPIError.self, from: data) {
+                throw SpotifyError.authFailed("\(apiError.error): \(apiError.errorDescription ?? "")")
+            }
+            let rawBody = String(data: data, encoding: .utf8) ?? "(empty)"
+            throw SpotifyError.authFailed("HTTP \(http.statusCode) – \(rawBody.prefix(200))")
         }
 
-        let token = try JSONDecoder().decode(SpotifyTokenResponse.self, from: data)
-        keychain.save(key: accessTokenKey, value: token.accessToken)
-        if let refresh = token.refreshToken {
-            keychain.save(key: refreshTokenKey, value: refresh)
+        do {
+            let token = try JSONDecoder().decode(SpotifyTokenResponse.self, from: data)
+            keychain.save(key: accessTokenKey, value: token.accessToken)
+            if let refresh = token.refreshToken {
+                keychain.save(key: refreshTokenKey, value: refresh)
+            }
+            let expiry = Date().addingTimeInterval(TimeInterval(token.expiresIn) - 60)
+            keychain.save(key: expiryKey, value: String(expiry.timeIntervalSince1970))
+        } catch is DecodingError {
+            let rawBody = String(data: data, encoding: .utf8) ?? "(empty)"
+            throw SpotifyError.authFailed("Unexpected response: \(rawBody.prefix(300))")
         }
-        let expiry = Date().addingTimeInterval(TimeInterval(token.expiresIn) - 60)
-        keychain.save(key: expiryKey, value: String(expiry.timeIntervalSince1970))
     }
 
     // MARK: - PKCE
