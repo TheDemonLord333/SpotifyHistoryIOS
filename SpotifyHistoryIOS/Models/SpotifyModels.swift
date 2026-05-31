@@ -198,7 +198,8 @@ struct SpotifyTokenResponse: Codable, Sendable {
     let scope: String
 
     enum CodingKeys: String, CodingKey {
-        case tokenType, scope
+        case scope
+        case tokenType = "token_type"
         case accessToken = "access_token"
         case expiresIn = "expires_in"
         case refreshToken = "refresh_token"
