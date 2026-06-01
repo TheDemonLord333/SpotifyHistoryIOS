@@ -29,18 +29,29 @@ final class SpotifyAuthManager {
     private let accessTokenKey = "spotify_access_token"
     private let refreshTokenKey = "spotify_refresh_token"
     private let expiryKey = "spotify_token_expiry"
+    private let sessionExpiryKey = "spotify_session_expiry"
     private var codeVerifier = ""
     private var activeSession: ASWebAuthenticationSession?
     private let contextProvider = AuthPresentationContextProvider()
 
+    private static let sessionDuration: TimeInterval = 90 * 24 * 60 * 60  // 90 days
+
     private init() {
-        let token = keychain.read(key: accessTokenKey)
-        let expiry = tokenExpiry
-        isAuthenticated = token != nil && expiry != nil && expiry! > Date()
+        // Authenticated as long as a refresh token exists and the 90-day session hasn't expired.
+        // The access token itself is refreshed automatically on demand — its 1h expiry is irrelevant here.
+        let hasRefresh = keychain.read(key: refreshTokenKey) != nil
+        let sessionValid = sessionExpiry.map { $0 > Date() } ?? false
+        isAuthenticated = hasRefresh && sessionValid
     }
 
     private var tokenExpiry: Date? {
         guard let str = keychain.read(key: expiryKey),
+              let ts = Double(str) else { return nil }
+        return Date(timeIntervalSince1970: ts)
+    }
+
+    private var sessionExpiry: Date? {
+        guard let str = keychain.read(key: sessionExpiryKey),
               let ts = Double(str) else { return nil }
         return Date(timeIntervalSince1970: ts)
     }
@@ -134,6 +145,7 @@ final class SpotifyAuthManager {
         keychain.delete(key: accessTokenKey)
         keychain.delete(key: refreshTokenKey)
         keychain.delete(key: expiryKey)
+        keychain.delete(key: sessionExpiryKey)
         isAuthenticated = false
         errorMessage = nil
     }
@@ -211,8 +223,13 @@ final class SpotifyAuthManager {
             if let refresh = token.refreshToken {
                 keychain.save(key: refreshTokenKey, value: refresh)
             }
-            let expiry = Date().addingTimeInterval(TimeInterval(token.expiresIn) - 60)
-            keychain.save(key: expiryKey, value: String(expiry.timeIntervalSince1970))
+            let accessExpiry = Date().addingTimeInterval(TimeInterval(token.expiresIn) - 60)
+            keychain.save(key: expiryKey, value: String(accessExpiry.timeIntervalSince1970))
+            // Set 90-day session expiry only on the initial login (not on every token refresh)
+            if keychain.read(key: sessionExpiryKey) == nil {
+                let sessionExp = Date().addingTimeInterval(Self.sessionDuration)
+                keychain.save(key: sessionExpiryKey, value: String(sessionExp.timeIntervalSince1970))
+            }
         } catch is DecodingError {
             let rawBody = String(data: data, encoding: .utf8) ?? "(empty)"
             throw SpotifyError.authFailed("Unexpected response: \(rawBody.prefix(300))")
